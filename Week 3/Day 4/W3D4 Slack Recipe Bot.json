@@ -1,0 +1,345 @@
+{
+  "name": "W3D4 Slack Recipe Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "trigger": [
+          "message"
+        ],
+        "channelId": {
+          "__rl": true,
+          "value": "C0CA5QKPAHG",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "37cbf49a-dcfd-438c-af3c-b67562624085",
+      "name": "Slack Trigger",
+      "webhookId": "188bf900-d90c-4d5e-ad0f-4686f93dc1f0",
+      "credentials": {
+        "slackApi": {
+          "id": "zEb49gJTIJglGaUn",
+          "name": "Slack Recipe Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "be74a25a-4557-4e0f-b4b0-01a25280c864",
+              "name": "recipe",
+              "value": "={{ ($json.text || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "3b952191-a0a6-4b25-a32e-8bf74de973e0",
+              "name": "channel",
+              "value": "={{ $json.channel }}",
+              "type": "string"
+            },
+            {
+              "id": "1c912b48-8b6d-44e0-91b3-7d83fb3c755d",
+              "name": "is_bot",
+              "value": "={{ !!$json.bot_id || $json.subtype === 'bot_message' }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "6f154a39-c2d2-4d45-ac01-f40ac1c5b6e6",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d863693a-68a0-47e5-9ab7-386a10a172a7",
+              "leftValue": "={{ $json.is_bot }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        0
+      ],
+      "id": "e8718fa9-ce04-4c21-a051-155e0e528c31",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0f504362-987a-4951-86d8-0f9a5c6584ca",
+              "leftValue": "={{ $json.recipe }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        0
+      ],
+      "id": "c9434dd3-497f-4642-9679-5cade8c4019e",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a helpful Indian kitchen assistant.\n\nRecipe name: {{ $json.recipe }}\n\nList all the products and ingredients needed to make this recipe.\nReturn a clear bulleted list with approximate quantities (for 2-3 people).\nKeep it short and practical. Use \"•\" for bullets and *bold* for section headings (Slack format).\nDo not add cooking steps.\n\nIf the recipe name is unclear or is not a food dish, reply only with:\n\"Sorry, I couldn't understand that recipe name. Please try again with a dish name, for example: Masala Dosa\"",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        896,
+        96
+      ],
+      "id": "140684ab-41c8-4dc9-b520-7652db087003",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-haiku-5-5",
+          "mode": "list",
+          "cachedResultName": "Claude Haiku 5.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        832,
+        304
+      ],
+      "id": "99662720-b0e2-4d2f-adbe-bc68745abd29",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "TmcaK85PtZ9dB8Ac",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const info = $('Edit Fields').first().json;\n\nreturn $input.all().map(item => {\n  const answer = (item.json.text || '').trim();\n  const isSorry = answer.toLowerCase().startsWith('sorry');\n  return {\n    json: {\n      channel: info.channel,\n      text: isSorry\n        ? `🤔 ${answer}`\n        : `🍳 *Ingredients for ${info.recipe}*\\n\\n${answer}\\n\\n_— Recipe Bot (n8n + AI)_`\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        96
+      ],
+      "id": "315c4f94-bd68-47de-954c-6514e51be4f5",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $json.channel }}",
+          "mode": "id"
+        },
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        1488,
+        96
+      ],
+      "id": "51cbd30c-15af-4f54-94fb-551924672f3a",
+      "name": "Send a message",
+      "webhookId": "99e170bd-eb65-4549-89ce-00216825aab1",
+      "credentials": {
+        "slackApi": {
+          "id": "zEb49gJTIJglGaUn",
+          "name": "Slack Recipe Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $json.channel }}",
+          "mode": "id"
+        },
+        "text": "=   🙏 Please type a recipe name ",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        896,
+        -55.725089509692
+      ],
+      "id": "838eac23-2ce3-472c-bd9f-f10b98b5beb4",
+      "name": "Send a message1",
+      "webhookId": "e12cf507-db12-4b57-834e-2c06f6d39901",
+      "credentials": {
+        "slackApi": {
+          "id": "zEb49gJTIJglGaUn",
+          "name": "Slack Recipe Bot"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Slack Trigger": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "9d3a2747-041d-4a96-873d-4ab3ede90098",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ddb2548056f7c23d6a1ee4ef31c77cd0bc725fba4a07c3b72ea687f1e4df18b1"
+  },
+  "nodeGroups": [],
+  "id": "S3YaS0V0FV4SEFTq",
+  "tags": []
+}

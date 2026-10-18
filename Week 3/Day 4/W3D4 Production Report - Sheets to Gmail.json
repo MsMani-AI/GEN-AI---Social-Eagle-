@@ -1,0 +1,137 @@
+{
+  "name": "W3D4 Production Report - Sheets to Gmail",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "92ef640e-2ebc-469f-b1d5-bc79e6ab1c23",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the Daily OEE Report email from the sheet rows (v2: with reasons + action list)\nconst rows = $input.all().map(i => i.json);\n\n// 1. Empty-sheet check: no machine rows -> stop (no blank email)\nconst valid = rows.filter(r => r.Machine && String(r.Machine).trim() !== \"\");\nif (valid.length === 0) {\n  return [];\n}\n\n// Helpers\nconst num = v => Number(v) || 0;\nconst pct = v => (v * 100).toFixed(1) + \"%\";\nconst txt = v => (v === undefined || v === null || String(v).trim() === \"\" || String(v).trim() === \"-\") ? \"\" : String(v).trim();\n\nlet tPlanned = 0, tRun = 0, tIdeal = 0, tTotal = 0, tGood = 0;\nconst lines = [];\nconst actions = [];\n\n// 2. OEE for each machine\nfor (const r of valid) {\n  const planned = num(r.Planned_Time_Min);\n  const down    = num(r.Downtime_Min);\n  const cycle   = num(r.Ideal_Cycle_Time_Sec);\n  const total   = num(r.Total_Count);\n  const good    = num(r.Good_Count);\n  const downWhy = txt(r.Downtime_Reason);\n  const rejWhy  = txt(r.Reject_Reason);\n\n  const run = Math.max(planned - down, 0);\n  const A = planned > 0 ? run / planned : 0;\n  const P = run > 0 ? (cycle * total) / (run * 60) : 0;\n  const Q = total > 0 ? good / total : 0;\n  const oee = A * P * Q;\n\n  tPlanned += planned; tRun += run; tIdeal += cycle * total;\n  tTotal += total; tGood += good;\n\n  const flag = oee >= 0.85 ? \"✅\" : oee >= 0.6 ? \"⚠️\" : \"🔴\";\n  let line = `${flag} ${r.Machine} (${r.Shift}): OEE ${pct(oee)} | A ${pct(A)} | P ${pct(P)} | Q ${pct(Q)} | Good ${good}/${total} | Downtime ${down} min`;\n  if (downWhy) line += ` (${downWhy})`;\n  if (rejWhy && total - good > 0) line += ` | Rejects ${total - good} (${rejWhy})`;\n  lines.push(line);\n\n  // 3. Action list: machines below 85%, with their biggest loss\n  if (oee < 0.85) {\n    const losses = [\n      { name: \"Availability (stoppage)\", v: A, why: downWhy },\n      { name: \"Performance (slow running)\", v: P, why: \"\" },\n      { name: \"Quality (rejects)\", v: Q, why: rejWhy }\n    ].sort((a, b) => a.v - b.v);\n    const main = losses[0];\n    actions.push(`- ${r.Machine}: main loss = ${main.name} ${pct(main.v)}` + (main.why ? ` → reason: ${main.why}` : \"\"));\n  }\n}\n\n// 4. Plant OEE\nconst pA = tPlanned > 0 ? tRun / tPlanned : 0;\nconst pP = tRun > 0 ? tIdeal / (tRun * 60) : 0;\nconst pQ = tTotal > 0 ? tGood / tTotal : 0;\nconst pOEE = pA * pP * pQ;\n\n// 5. Build the email\nconst date = valid[0].Date;\nconst subject = `Daily OEE Report – ${date} – Plant OEE ${pct(pOEE)}`;\nconst body = [\n  \"Hi Sir,\",\n  \"\",\n  `Here is the OEE summary for ${date} (${valid.length} machines):`,\n  \"\",\n  ...lines,\n  \"\",\n  `PLANT OEE: ${pct(pOEE)}  (Availability ${pct(pA)} x Performance ${pct(pP)} x Quality ${pct(pQ)})`,\n  `Total good parts: ${tGood} / ${tTotal}`,\n  \"\",\n  \"ACTION NEEDED (machines below 85%):\",\n  ...(actions.length ? actions : [\"- None. All machines are world class today.\"]),\n  \"\",\n  \"Legend: ✅ 85% and above (world class) | ⚠️ 60-85% | 🔴 below 60%\",\n  \"\",\n  \"Regards,\",\n  \"Production Automation Bot (n8n)\"\n].join(\"\\n\");\n\nreturn [{ json: { subject, body, machines: valid.length, plant_oee: pct(pOEE) } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "65862fec-4ab8-446e-a44a-3f48912a1707",
+      "name": "Build OEE Email"
+    },
+    {
+      "parameters": {
+        "sendTo": "jackmani.mech@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "ffad8c63-e545-4fb9-a726-e8f147ebcb79",
+      "name": "Send OEE Email",
+      "webhookId": "7140c98f-a9a1-458b-bac5-8391e35fb89e",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "hxl9T5USfo6bqZqE",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1_KdNqcB8GyZ2DBAYdj_lgCgYVtUQO4-NIt2rT5L2Wuk",
+          "mode": "list",
+          "cachedResultName": "W3D4 Factory Production",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_KdNqcB8GyZ2DBAYdj_lgCgYVtUQO4-NIt2rT5L2Wuk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Production",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_KdNqcB8GyZ2DBAYdj_lgCgYVtUQO4-NIt2rT5L2Wuk/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        0
+      ],
+      "id": "c8035b73-e45c-42db-ad54-9544ed91c4ae",
+      "name": "Read Production Sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Sj9bEwSNdlFJkZ4O",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Read Production Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build OEE Email": {
+      "main": [
+        [
+          {
+            "node": "Send OEE Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Production Sheet": {
+      "main": [
+        [
+          {
+            "node": "Build OEE Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "2cb6b6c7-3b39-4bd1-be95-eaa9b676e698",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ddb2548056f7c23d6a1ee4ef31c77cd0bc725fba4a07c3b72ea687f1e4df18b1"
+  },
+  "nodeGroups": [],
+  "id": "EybUsUOBeMutsrIO",
+  "tags": []
+}
