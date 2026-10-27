@@ -112,6 +112,14 @@ def main():
     st.set_page_config(page_title="Hybrid RAG - Spotify Architecture", page_icon="🎵")
     st.title("🎵 Hybrid RAG – Spotify Architecture")
     st.caption("BM25 (keyword) + Vector (meaning) → RRF fusion → Claude answer")
+    
+    # ---------- PASSWORD (only when APP_PASSWORD is set, e.g. on VPS) ----------
+    app_password = os.environ.get("APP_PASSWORD")
+    if app_password:
+        typed = st.text_input("🔒 Password", type="password")
+        if typed != app_password:
+            st.info("Enter the password to use the app.")
+            st.stop()
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
         st.error("ANTHROPIC_API_KEY is not set. Set it in the terminal and restart.")
